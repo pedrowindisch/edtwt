@@ -8,4 +8,4 @@ será necessário ter, em sua máquina, python >= 3.13 e o poetry instalado (`pi
 
 crie um arquivo .env em seu diretório raiz e, nele, cole os conteúdos presentes no [.env.example](/.env.example), informando os valores reais.
 
-rode o projeto com `poetry run extrator.py`
+rode o projeto com `poetry run python edtwt.py`

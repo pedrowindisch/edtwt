@@ -7,3 +7,5 @@ data/*.csv
 data/*.sqlite3
 data/*.db
 data/*.checkpoint
+
+.DS_Store

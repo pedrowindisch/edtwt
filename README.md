@@ -22,7 +22,4 @@ o CSV anonimizado remove ids, urls, usernames e nomes, reduz datas completas ape
 
 ## entregas (partes)
 
-na tela inicial também existem as opções `Entrega 1` e `Entrega 2`.
-
-- `Entrega 1` se refere à tokenização, remoção de stopwords e stemming com as bibliotecas sugeridas pelo professor. ele cria o arquivo `entregas/p1/entrega_1.csv` a partir de `data/tweets.csv`, adicionando as colunas `tokenizacao_nltk`, `remocao_stopwords_spacy` e `stemming_nltk`.
-- `Entrega 2`: cria `entregas/p1/entrega_2.csv`. ainda não está finalizado.
+na tela inicial também existem as opções `Entrega 1` e `Entrega 2`. ver mais sobre em [/entregas](/entregas/).

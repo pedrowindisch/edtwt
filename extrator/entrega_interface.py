@@ -38,7 +38,8 @@ class EntregaScreen(Screen):
                 "remocao de stopwords (spaCy) e stemming (NLTK)."
             )
         return (
-            "Copia data/tweets.csv e adiciona normalizacao textual (re) "
+            "Parte de entregas/p1/entrega_1.csv, gerando a entrega 1 se necessario, "
+            "e salva o resultado em entregas/p2 com normalizacao textual (re) "
             "e features TF-IDF (scikit-learn)."
         )
 

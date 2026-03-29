@@ -31,18 +31,33 @@ REGEX_ESPACOS = re.compile(r"\s+", re.UNICODE)
 @dataclass(slots=True, frozen=True)
 class ConfiguracaoEntrega:
     caminho_entrada: Path = Path("data/tweets.csv")
-    pasta_saida: Path = Path("entregas/p1")
+    pasta_saida_entrega_1: Path = Path("entregas/p1")
+    pasta_saida_entrega_2: Path = Path("entregas/p2")
+
+    def pasta_saida(self, tipo_entrega: str) -> Path:
+        if tipo_entrega == ENTREGA_1:
+            return self.pasta_saida_entrega_1
+        if tipo_entrega == ENTREGA_2:
+            return self.pasta_saida_entrega_2
+        raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
+
+    def caminho_entrada_processamento(self, tipo_entrega: str) -> Path:
+        if tipo_entrega == ENTREGA_1:
+            return self.caminho_entrada
+        if tipo_entrega == ENTREGA_2:
+            return self.caminho_saida(ENTREGA_1)
+        raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
     def caminho_saida(self, tipo_entrega: str) -> Path:
         if tipo_entrega == ENTREGA_1:
-            return self.pasta_saida / "entrega_1.csv"
+            return self.pasta_saida(ENTREGA_1) / "entrega_1.csv"
         if tipo_entrega == ENTREGA_2:
-            return self.pasta_saida / "entrega_2.csv"
+            return self.pasta_saida(ENTREGA_2) / "entrega_2.csv"
         raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
     def caminho_metadados(self, tipo_entrega: str) -> Path | None:
         if tipo_entrega == ENTREGA_2:
-            return self.pasta_saida / "entrega_2_tfidf_features.json"
+            return self.pasta_saida(ENTREGA_2) / "entrega_2_tfidf_features.json"
         return None
 
 
@@ -66,14 +81,15 @@ class ProcessadorEntrega:
         if not configuracao.caminho_entrada.exists():
             raise ValueError(f"CSV nao encontrado em {configuracao.caminho_entrada}.")
 
-        configuracao.pasta_saida.mkdir(parents=True, exist_ok=True)
+        configuracao.pasta_saida(self.tipo_entrega).mkdir(parents=True, exist_ok=True)
+        caminho_entrada = self._garantir_entrada_processamento(configuracao)
         caminho_saida = configuracao.caminho_saida(self.tipo_entrega)
 
         self._emitir_status(
-            f"Copiando {configuracao.caminho_entrada} para {caminho_saida}..."
+            f"Copiando {caminho_entrada} para {caminho_saida}..."
         )
         self._emitir_progresso(0)
-        shutil.copyfile(configuracao.caminho_entrada, caminho_saida)
+        shutil.copyfile(caminho_entrada, caminho_saida)
 
         linhas, cabecalhos = self._ler_linhas(caminho_saida)
         if not linhas:
@@ -99,6 +115,25 @@ class ProcessadorEntrega:
             "caminho_metadados": caminho_metadados,
         }
 
+    def _garantir_entrada_processamento(self, configuracao: ConfiguracaoEntrega) -> Path:
+        caminho_entrada = configuracao.caminho_entrada_processamento(self.tipo_entrega)
+        if self.tipo_entrega != ENTREGA_2:
+            return caminho_entrada
+
+        if caminho_entrada.exists():
+            return caminho_entrada
+
+        self._emitir_status(
+            "Entrega 2 depende de entrega_1.csv. Gerando entrega 1 antes de continuar..."
+        )
+
+        ProcessadorEntrega(
+            ENTREGA_1,
+            callback_progresso=self.callback_progresso,
+            callback_status=self.callback_status,
+        ).gerar()
+        return caminho_entrada
+
     def _processar_entrega_1(self, linhas: list[dict[str, str]]) -> list[str]:
         self._emitir_status(
             "Entrega 1: tokenizacao com NLTK, remocao de stopwords com spaCy e stemming com NLTK..."
@@ -108,6 +143,7 @@ class ProcessadorEntrega:
         for indice, linha in enumerate(linhas, start=1):
             texto = normalizar_texto_csv(linha.get("text"))
             texto = remover_decoracoes_com_regex(texto)
+            texto = remover_numericos_com_regex(texto)
             tokens = tokenizar_com_nltk(texto)
             tokens_sem_stopwords = remover_stopwords_com_spacy(tokens)
             texto_radicalizado = aplicar_stemming_com_nltk(tokens_sem_stopwords)
@@ -135,9 +171,23 @@ class ProcessadorEntrega:
 
         total_linhas = len(linhas)
         textos_normalizados: list[str] = []
+        vetorizador = TfidfVectorizer(
+            lowercase=False,
+            max_df=0.85,
+            min_df=2,
+            max_features=1000,
+            token_pattern=r"(?u)\b\w\w+\b",
+        )
 
         for indice, linha in enumerate(linhas, start=1):
-            texto_normalizado = normalizar_com_regex(normalizar_texto_csv(linha.get("text")))
+            if "stemming_nltk" not in linha:
+                raise ValueError(
+                    "Entrega 2 precisa das colunas geradas pela Entrega 1, incluindo stemming_nltk."
+                )
+
+            texto_base = normalizar_texto_csv(linha.get("stemming_nltk"))
+            texto_normalizado = normalizar_com_regex(texto_base)
+
             linha["normalizacao_re"] = texto_normalizado
             textos_normalizados.append(texto_normalizado)
             self._emitir_progresso(int(indice / total_linhas * 50))
@@ -146,13 +196,6 @@ class ProcessadorEntrega:
         features_por_linha: list[str] = [para_json({}) for _ in linhas]
 
         if any(textos_normalizados):
-            vetorizador = TfidfVectorizer(
-                lowercase=False,
-                max_df=0.85,
-                max_features=50,
-                token_pattern=r"(?u)\b\w+\b",
-            )
-
             try:
                 matriz = vetorizador.fit_transform(textos_normalizados)
                 nomes_features = vetorizador.get_feature_names_out().tolist()
@@ -177,14 +220,17 @@ class ProcessadorEntrega:
 
         caminho_metadados = configuracao.caminho_metadados(self.tipo_entrega)
         if caminho_metadados is not None:
+            params = vetorizador.get_params()
             caminho_metadados.write_text(
                 json.dumps(
                     {
                         "feature_names": nomes_features,
                         "vectorizer": {
-                            "max_df": 0.85,
-                            "max_features": 50,
-                            "token_pattern": r"(?u)\b\w+\b",
+                            "max_df": params["max_df"],
+                            "min_df": params["min_df"],
+                            "max_features": params["max_features"],
+                            "token_pattern": params["token_pattern"],
+                            "lowercase": params["lowercase"],
                         },
                     },
                     ensure_ascii=False,
@@ -242,9 +288,18 @@ TEXTO_COM_EMOJIS = re.compile(
     r"\u200d\uFE0F]"
 ) 
 
+TOKENS_NUMERICOS = re.compile(r"^\d+$", re.UNICODE)
+
 def remover_decoracoes_com_regex(texto: str) -> str:
     # ☆．。．:*･ﾟ, ｡･:*:･ﾟ'☆
     return TEXTO_COM_EMOJIS.sub(" ", texto)
+
+def remover_numericos_com_regex(texto: str) -> str:
+    return " ".join(
+        token
+        for token in texto.split()
+        if not TOKENS_NUMERICOS.match(token)
+    )
 
 def tokenizar_com_nltk(texto: str) -> list[str]:
     return [

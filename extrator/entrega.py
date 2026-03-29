@@ -7,11 +7,9 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
-import unicodedata
 
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import TweetTokenizer
-from sklearn.feature_extraction.text import TfidfVectorizer
 from spacy.lang.pt.stop_words import STOP_WORDS as SPACY_PT_STOP_WORDS
 
 
@@ -135,111 +133,27 @@ class ProcessadorEntrega:
         return caminho_entrada
 
     def _processar_entrega_1(self, linhas: list[dict[str, str]]) -> list[str]:
-        self._emitir_status(
-            "Entrega 1: tokenizacao com NLTK, remocao de stopwords com spaCy e stemming com NLTK..."
+        from processadores.entrega_1 import processar_entrega_1
+
+        return processar_entrega_1(
+            linhas=linhas,
+            emitir_progresso=self._emitir_progresso,
+            emitir_status=self._emitir_status,
         )
-
-        total_linhas = len(linhas)
-        for indice, linha in enumerate(linhas, start=1):
-            texto = normalizar_texto_csv(linha.get("text"))
-            texto = remover_decoracoes_com_regex(texto)
-            texto = remover_numericos_com_regex(texto)
-            tokens = tokenizar_com_nltk(texto)
-            tokens_sem_stopwords = remover_stopwords_com_spacy(tokens)
-            texto_radicalizado = aplicar_stemming_com_nltk(tokens_sem_stopwords)
-
-            linha["tokenizacao_nltk"] = para_json(tokens)
-            linha["remocao_stopwords_spacy"] = para_json(tokens_sem_stopwords)
-            linha["stemming_nltk"] = texto_radicalizado
-
-            self._emitir_progresso(int(indice / total_linhas * 100))
-
-        return [
-            "tokenizacao_nltk",
-            "remocao_stopwords_spacy",
-            "stemming_nltk",
-        ]
 
     def _processar_entrega_2(
         self,
         linhas: list[dict[str, str]],
         configuracao: ConfiguracaoEntrega,
     ) -> tuple[list[str], str]:
-        self._emitir_status(
-            "Entrega 2: normalizacao com re e selecao de features com scikit-learn..."
+        from processadores.entrega_2 import processar_entrega_2
+
+        return processar_entrega_2(
+            linhas=linhas,
+            configuracao=configuracao,
+            emitir_progresso=self._emitir_progresso,
+            emitir_status=self._emitir_status,
         )
-
-        total_linhas = len(linhas)
-        textos_normalizados: list[str] = []
-        vetorizador = TfidfVectorizer(
-            lowercase=False,
-            max_df=0.85,
-            min_df=2,
-            max_features=1000,
-            token_pattern=r"(?u)\b\w\w+\b",
-        )
-
-        for indice, linha in enumerate(linhas, start=1):
-            if "stemming_nltk" not in linha:
-                raise ValueError(
-                    "Entrega 2 precisa das colunas geradas pela Entrega 1, incluindo stemming_nltk."
-                )
-
-            texto_base = normalizar_texto_csv(linha.get("stemming_nltk"))
-            texto_normalizado = normalizar_com_regex(texto_base)
-
-            linha["normalizacao_re"] = texto_normalizado
-            textos_normalizados.append(texto_normalizado)
-            self._emitir_progresso(int(indice / total_linhas * 50))
-
-        nomes_features: list[str] = []
-        features_por_linha: list[str] = [para_json({}) for _ in linhas]
-
-        if any(textos_normalizados):
-            try:
-                matriz = vetorizador.fit_transform(textos_normalizados)
-                nomes_features = vetorizador.get_feature_names_out().tolist()
-
-                for indice, vetor_linha in enumerate(matriz, start=1):
-                    mapa_features = {
-                        nomes_features[indice_coluna]: round(float(valor), 6)
-                        for indice_coluna, valor in zip(vetor_linha.indices, vetor_linha.data)
-                    }
-                    features_por_linha[indice - 1] = para_json(
-                        mapa_features,
-                        ordenar_chaves=True,
-                    )
-                    self._emitir_progresso(50 + int(indice / total_linhas * 50))
-            except ValueError:
-                self._emitir_progresso(100)
-        else:
-            self._emitir_progresso(100)
-
-        for linha, mapa_features in zip(linhas, features_por_linha):
-            linha["features_tfidf_sklearn"] = mapa_features
-
-        caminho_metadados = configuracao.caminho_metadados(self.tipo_entrega)
-        if caminho_metadados is not None:
-            params = vetorizador.get_params()
-            caminho_metadados.write_text(
-                json.dumps(
-                    {
-                        "feature_names": nomes_features,
-                        "vectorizer": {
-                            "max_df": params["max_df"],
-                            "min_df": params["min_df"],
-                            "max_features": params["max_features"],
-                            "token_pattern": params["token_pattern"],
-                            "lowercase": params["lowercase"],
-                        },
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
-
-        return ["normalizacao_re", "features_tfidf_sklearn"], str(caminho_metadados or "")
 
     def _ler_linhas(self, caminho_csv: Path) -> tuple[list[dict[str, str]], list[str]]:
         with caminho_csv.open("r", newline="", encoding="utf-8") as arquivo_csv:

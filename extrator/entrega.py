@@ -7,6 +7,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+import unicodedata
 
 from nltk.stem import SnowballStemmer
 from nltk.tokenize import TweetTokenizer
@@ -106,6 +107,7 @@ class ProcessadorEntrega:
         total_linhas = len(linhas)
         for indice, linha in enumerate(linhas, start=1):
             texto = normalizar_texto_csv(linha.get("text"))
+            texto = remover_decoracoes_com_regex(texto)
             tokens = tokenizar_com_nltk(texto)
             tokens_sem_stopwords = remover_stopwords_com_spacy(tokens)
             texto_radicalizado = aplicar_stemming_com_nltk(tokens_sem_stopwords)
@@ -224,6 +226,25 @@ def normalizar_texto_csv(valor: object) -> str:
         return ""
     return str(valor)
 
+TEXTO_COM_EMOJIS = re.compile(
+    r"[^a-zA-ZÀ-ÿ0-9\s.,!?'\-"
+    r"#@"
+    r"\U0001F300-\U0001F5FF"
+    r"\U0001F600-\U0001F64F"
+    r"\U0001F680-\U0001F6FF"
+    r"\U0001F700-\U0001F77F"
+    r"\U0001F780-\U0001F7FF"
+    r"\U0001F800-\U0001F8FF"
+    r"\U0001F900-\U0001F9FF"
+    r"\U0001FA00-\U0001FAFF"
+    r"\U00002700-\U000027BF"
+    r"\U00002600-\U000026FF"
+    r"\u200d\uFE0F]"
+) 
+
+def remover_decoracoes_com_regex(texto: str) -> str:
+    # ☆．。．:*･ﾟ, ｡･:*:･ﾟ'☆
+    return TEXTO_COM_EMOJIS.sub(" ", texto)
 
 def tokenizar_com_nltk(texto: str) -> list[str]:
     return [

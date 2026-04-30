@@ -15,6 +15,8 @@ from spacy.lang.pt.stop_words import STOP_WORDS as SPACY_PT_STOP_WORDS
 
 ENTREGA_1 = "entrega_1"
 ENTREGA_2 = "entrega_2"
+ENTREGA_3 = "entrega_3"
+ENTREGA_4 = "entrega_4"
 
 TOKENIZADOR_NLTK = TweetTokenizer(preserve_case=True, reduce_len=False, strip_handles=False)
 RADICALIZADOR_NLTK = SnowballStemmer("portuguese")
@@ -31,12 +33,18 @@ class ConfiguracaoEntrega:
     caminho_entrada: Path = Path("data/tweets.csv")
     pasta_saida_entrega_1: Path = Path("entregas/p1")
     pasta_saida_entrega_2: Path = Path("entregas/p2")
+    pasta_saida_entrega_3: Path = Path("entregas/p3")
+    pasta_saida_entrega_4: Path = Path("entregas/p4")
 
     def pasta_saida(self, tipo_entrega: str) -> Path:
         if tipo_entrega == ENTREGA_1:
             return self.pasta_saida_entrega_1
         if tipo_entrega == ENTREGA_2:
             return self.pasta_saida_entrega_2
+        if tipo_entrega == ENTREGA_3:
+            return self.pasta_saida_entrega_3
+        if tipo_entrega == ENTREGA_4:
+            return self.pasta_saida_entrega_4
         raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
     def caminho_entrada_processamento(self, tipo_entrega: str) -> Path:
@@ -44,6 +52,10 @@ class ConfiguracaoEntrega:
             return self.caminho_entrada
         if tipo_entrega == ENTREGA_2:
             return self.caminho_saida(ENTREGA_1)
+        if tipo_entrega == ENTREGA_3:
+            return self.caminho_saida(ENTREGA_2)
+        if tipo_entrega == ENTREGA_4:
+            return self.caminho_saida(ENTREGA_3)
         raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
     def caminho_saida(self, tipo_entrega: str) -> Path:
@@ -51,11 +63,19 @@ class ConfiguracaoEntrega:
             return self.pasta_saida(ENTREGA_1) / "entrega_1.csv"
         if tipo_entrega == ENTREGA_2:
             return self.pasta_saida(ENTREGA_2) / "entrega_2.csv"
+        if tipo_entrega == ENTREGA_3:
+            return self.pasta_saida(ENTREGA_3) / "entrega_3.csv"
+        if tipo_entrega == ENTREGA_4:
+            return self.pasta_saida(ENTREGA_4) / "entrega_4.csv"
         raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
     def caminho_metadados(self, tipo_entrega: str) -> Path | None:
         if tipo_entrega == ENTREGA_2:
             return self.pasta_saida(ENTREGA_2) / "entrega_2_tfidf_features.json"
+        if tipo_entrega == ENTREGA_3:
+            return self.pasta_saida(ENTREGA_3) / "entrega_3_word2vec_features.json"
+        if tipo_entrega == ENTREGA_4:
+            return self.pasta_saida(ENTREGA_4) / "entrega_4_bert_features.json"
         return None
 
 
@@ -66,7 +86,7 @@ class ProcessadorEntrega:
         callback_progresso: Callable[[int], None] | None = None,
         callback_status: Callable[[str], None] | None = None,
     ):
-        if tipo_entrega not in {ENTREGA_1, ENTREGA_2}:
+        if tipo_entrega not in {ENTREGA_1, ENTREGA_2, ENTREGA_3, ENTREGA_4}:
             raise ValueError(f"Entrega desconhecida: {tipo_entrega}")
 
         self.tipo_entrega = tipo_entrega
@@ -97,8 +117,18 @@ class ProcessadorEntrega:
 
         if self.tipo_entrega == ENTREGA_1:
             novas_colunas = self._processar_entrega_1(linhas)
-        else:
+        elif self.tipo_entrega == ENTREGA_2:
             novas_colunas, caminho_metadados = self._processar_entrega_2(
+                linhas,
+                configuracao,
+            )
+        elif self.tipo_entrega == ENTREGA_3:
+            novas_colunas, caminho_metadados = self._processar_entrega_3(
+                linhas,
+                configuracao,
+            )
+        else:
+            novas_colunas, caminho_metadados = self._processar_entrega_4(
                 linhas,
                 configuracao,
             )
@@ -115,10 +145,36 @@ class ProcessadorEntrega:
 
     def _garantir_entrada_processamento(self, configuracao: ConfiguracaoEntrega) -> Path:
         caminho_entrada = configuracao.caminho_entrada_processamento(self.tipo_entrega)
-        if self.tipo_entrega != ENTREGA_2:
+        if self.tipo_entrega == ENTREGA_1:
             return caminho_entrada
 
-        if caminho_entrada.exists():
+        if self.tipo_entrega == ENTREGA_2 and caminho_entrada.exists():
+            return caminho_entrada
+
+        if self.tipo_entrega == ENTREGA_3:
+            if caminho_entrada.exists():
+                return caminho_entrada
+            self._emitir_status(
+                "Entrega 3 depende de entrega_2.csv. Gerando entrega 2 antes de continuar..."
+            )
+            ProcessadorEntrega(
+                ENTREGA_2,
+                callback_progresso=self.callback_progresso,
+                callback_status=self.callback_status,
+            ).gerar()
+            return caminho_entrada
+
+        if self.tipo_entrega == ENTREGA_4:
+            if caminho_entrada.exists():
+                return caminho_entrada
+            self._emitir_status(
+                "Entrega 4 depende de entrega_3.csv. Gerando entrega 3 antes de continuar..."
+            )
+            ProcessadorEntrega(
+                ENTREGA_3,
+                callback_progresso=self.callback_progresso,
+                callback_status=self.callback_status,
+            ).gerar()
             return caminho_entrada
 
         self._emitir_status(
@@ -149,6 +205,34 @@ class ProcessadorEntrega:
         from processadores.entrega_2 import processar_entrega_2
 
         return processar_entrega_2(
+            linhas=linhas,
+            configuracao=configuracao,
+            emitir_progresso=self._emitir_progresso,
+            emitir_status=self._emitir_status,
+        )
+
+    def _processar_entrega_3(
+        self,
+        linhas: list[dict[str, str]],
+        configuracao: ConfiguracaoEntrega,
+    ) -> tuple[list[str], str]:
+        from processadores.entrega_3 import processar_entrega_3
+
+        return processar_entrega_3(
+            linhas=linhas,
+            configuracao=configuracao,
+            emitir_progresso=self._emitir_progresso,
+            emitir_status=self._emitir_status,
+        )
+
+    def _processar_entrega_4(
+        self,
+        linhas: list[dict[str, str]],
+        configuracao: ConfiguracaoEntrega,
+    ) -> tuple[list[str], str]:
+        from processadores.entrega_4 import processar_entrega_4
+
+        return processar_entrega_4(
             linhas=linhas,
             configuracao=configuracao,
             emitir_progresso=self._emitir_progresso,

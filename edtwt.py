@@ -1,9 +1,8 @@
-
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Header, Button
 from textual.containers import Vertical
 from extrator.anonymizer_interface import AnonymizerScreen
-from extrator.entrega import ENTREGA_1, ENTREGA_2
+from extrator.entrega import ENTREGA_1, ENTREGA_2, ENTREGA_3, ENTREGA_4
 from extrator.entrega_interface import EntregaScreen
 from extrator.interface import ExtratorScreen
 
@@ -21,6 +20,8 @@ class SelecionadorEtapa(App):
             Button("Exportar dataset anonimizado", id="open_anonymizer"),
             Button("Entrega 1", id="open_entrega_1"),
             Button("Entrega 2", id="open_entrega_2"),
+            Button("Entrega 3", id="open_entrega_3"),
+            Button("Entrega 4", id="open_entrega_4"),
         )
         yield Footer()
 
@@ -33,6 +34,10 @@ class SelecionadorEtapa(App):
             self.push_screen(EntregaScreen(ENTREGA_1))
         elif event.button.id == "open_entrega_2":
             self.push_screen(EntregaScreen(ENTREGA_2))
+        elif event.button.id == "open_entrega_3":
+            self.push_screen(EntregaScreen(ENTREGA_3))
+        elif event.button.id == "open_entrega_4":
+            self.push_screen(EntregaScreen(ENTREGA_4))
 
     def action_toggle_dark(self) -> None:
         self.theme = (

@@ -5,7 +5,7 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Button, ProgressBar, Static
 
-from extrator.entrega import ENTREGA_1, ENTREGA_2, ProcessadorEntrega
+from extrator.entrega import ENTREGA_1, ENTREGA_2, ENTREGA_3, ENTREGA_4, ProcessadorEntrega
 from extrator.extraction_progress import ExtractionProgress
 
 
@@ -28,6 +28,8 @@ class EntregaScreen(Screen):
     def rotulo_botao(self) -> str:
         if self.entrega_kind == ENTREGA_1:
             return "Gerar entrega 1"
+        if self.entrega_kind == ENTREGA_4:
+            return "Gerar entrega 4"
         return "Gerar entrega 2"
 
     @property
@@ -36,6 +38,12 @@ class EntregaScreen(Screen):
             return (
                 "Copia data/tweets.csv e adiciona tokenizacao (NLTK), "
                 "remocao de stopwords (spaCy) e stemming (NLTK)."
+            )
+        if self.entrega_kind == ENTREGA_4:
+            return (
+                "Parte de entregas/p3/entrega_3.csv, gerando entregas anteriores "
+                "se necessario, e salva o resultado em entregas/p4 com embeddings "
+                "BERTimbau (mean pooling) e texto de entrada."
             )
         return (
             "Parte de entregas/p1/entrega_1.csv, gerando a entrega 1 se necessario, "

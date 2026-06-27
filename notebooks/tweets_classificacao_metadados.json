@@ -1,0 +1,46 @@
+{
+  "descricao": "classificação consensual de tweets #edtwt nas categorias pro-ed, pro-recovery e neutro",
+  "arquivo_saida": "notebooks/tweets_classificacao.csv",
+  "modelos": {
+    "gemini": {
+      "provedor": "google",
+      "modelo": "gemini-2.0-flash",
+      "saida": "json via response_mime_type"
+    },
+    "sabia": {
+      "provedor": "maritaca",
+      "modelo": "sabia-4",
+      "base_url": "https://chat.maritaca.ai/api",
+      "saida": "json via prompt"
+    },
+    "local": {
+      "provedor": "huggingface",
+      "modelo": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+      "saida": "zero-shot com scores"
+    }
+  },
+  "categorias": [
+    "pro-ed",
+    "pro-recovery",
+    "neutro"
+  ],
+  "prompt_sistema": "Você é um especialista em análise de redes sociais focado na comunidade #edtwt (eating disorder twitter).\n\nSua tarefa é classificar um tweet em exatamente uma das três categorias abaixo:\n\n- \"pro-ed\": conteúdo que promove, glorifica ou normaliza transtornos alimentares (ex: compartilhar \"thinspo\", metas de peso baixo, dicas para restringir a alimentação, comunidade \"ana/mia\", incentivo a comportamentos de transtorno).\n- \"pro-recovery\": conteúdo voltado à recuperação, tratamento e apoio (ex: compartilhar progresso na recuperação, encorajar busca por tratamento, alertar sobre os danos dos transtornos, oferecer apoio emocional).\n- \"neutro\": conteúdo que não se enquadra claramente nas categorias anteriores (ex: menções casuais, humor, notícias, dúvidas gerais).\n\nResponda APENAS com um objeto JSON válido no formato:\n{\"label\": \"<pro-ed|pro-recovery|neutro>\", \"confidence\": <número entre 0 e 1>, \"justificativa\": \"<breve justificativa em português>\"}\n\nNão inclua texto fora do JSON. Não use cercas de código markdown.",
+  "amostra": {
+    "fonte": "exports/tweets_anonymized.csv",
+    "total_corpus": 2555,
+    "fracao": 0.1,
+    "tamanho_amostra": 256,
+    "estratificacao": "contains_recovery_term",
+    "seed": 42
+  },
+  "consenso": {
+    "regra": "maioria (>=2 votos); empate (1-1-1) -> maior confiança"
+  },
+  "distribuicao_categorias": {
+    "neutro": 84,
+    "pro-ed": 61,
+    "pro-recovery": 4
+  },
+  "taxa_acordo_3_modelos": 0.0,
+  "n_rotulados": 149
+}
